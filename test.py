@@ -1,4 +1,4 @@
-import random
+import math, random
 import pygame
 
 class Card(object):
@@ -7,13 +7,15 @@ class Card(object):
         self.airborne = False
         self.dims = (50, 50)
         self.knockback = 0
-        self.label = label
+        self.label = label # Display text
         self.owner = owner
         self.position = (0, 0) # (col, row)
         self.surf = pygame.Surface(self.dims)
         self.travel_dir = None
-        self.x = 0
-        self.y = 0
+        self.x = 0 # Global x pos
+        self.y = 0 # Global y pos
+        self.x_target = 0 # Target x pos for animation
+        self.y_target = 0 # Target y pos for animation
 
         # 2px border
         self.surf.fill(pygame.Color('#222222'))
@@ -27,6 +29,18 @@ class Card(object):
         offset_y = int((self.dims[1] - label.get_size()[1]) / 2) # Center Y
         self.surf.blit(label, dest=(offset_x, offset_y))
 
+    def animate(self):
+        x_diff = self.x_target - self.x
+        y_diff = self.y_target - self.y
+        if x_diff > 0:
+            self.x += math.ceil(abs(x_diff / 5))
+        elif x_diff < 0:
+            self.x -= math.ceil(abs(x_diff / 5))
+        if y_diff > 0:
+            self.y += math.ceil(abs(y_diff / 5))
+        elif y_diff < 0:
+            self.y -= math.ceil(abs(y_diff / 5))
+
     def place(self, pos):
         """Set card on a given (col, row) tile"""
         board_offset = 1
@@ -38,6 +52,20 @@ class Card(object):
         self.position = pos
         self.x = board_offset + pos[0] * tile_size + pos[0] + card_offset_x
         self.y = board_offset + pos[1] * tile_size + pos[1] + card_offset_y
+        self.x_target = self.x
+        self.y_target = self.y
+
+    def set_target(self, pos):
+        """Set target for animation"""
+        board_offset = 1
+        tile_size = 70
+        card_offset_x = int((tile_size - self.dims[0]) / 2)
+        card_offset_y = int((tile_size - self.dims[1]) / 2)
+        if pos[0] % 2:
+            card_offset_y += tile_size / 2
+        self.position = pos
+        self.x_target = board_offset + pos[0] * tile_size + pos[0] + card_offset_x
+        self.y_target = board_offset + pos[1] * tile_size + pos[1] + card_offset_y
 
 class Tile(object):
     def __init__(self, row, col, y_offset=False):
@@ -155,15 +183,14 @@ def update_positions(cards, kb_cards):
                 update_positions(cards, kb_cards)
             else:
                 print(f'Destination {dest_pos} is free; {card.label} moves to {dest_pos}; KB = {card.knockback}')
-                card.place(dest_pos)
+                card.set_target(dest_pos)
 
 def main():
     """
     TODO
         Create wall tiles
         Handle wall collisions
-        Animate
-            Separate "rounds" of knockback
+        Separate "rounds" of knockback animation
     """
     dims = (711, 711)
     pygame.init()
@@ -201,6 +228,10 @@ def main():
         moving_cards = [c for c in cards if c.knockback]
         if moving_cards:
             update_positions(cards, moving_cards)
+
+        for card in cards:
+            if card.x != card.x_target or card.y != card.y_target:
+                card.animate()
 
         window_surface.blit(background, (0, 0))
         for tile in grid:
