@@ -89,6 +89,15 @@ class Tile(object):
         self.surf.fill(pygame.Color('#b54848'))
         pygame.draw.rect(self.surf, pygame.Color('#6f3333'), pygame.Rect((1, 1), (68, 68)))
 
+def advance_kb_round(cards, kb_animation_event, current_kb_round):
+    print(f'Looking for cards with KB round {current_kb_round}...')
+    for card in [c for c in cards if c.knockback_round == current_kb_round]:
+        print(f'Turning on animation for {card.label}')
+        card.animating = True
+        card.knockback_round = 0
+    pygame.time.set_timer(kb_animation_event, 500, True)
+    return current_kb_round + 1
+
 def attack(attacker, target):
     # Determine direction of knockback
     x_dir = None
@@ -103,7 +112,7 @@ def attack(attacker, target):
         y_dir = 'north'
 
     # Apply knockback force and direction to target
-    target.knockback = 5
+    target.knockback = 7
     target.travel_dir = ''.join([d for d in [y_dir, x_dir] if d])
 
     print('Attack event')
@@ -170,14 +179,12 @@ def get_dest(old_pos, direction):
         print('Ring out -- bottom')
     return tuple(new_pos)
 
-def advance_kb_round(cards, kb_animation_event, current_kb_round):
-    print(f'Looking for cards with KB round {current_kb_round}...')
-    for card in [c for c in cards if c.knockback_round == current_kb_round]:
-        print(f'Turning on animation for {card.label}')
-        card.animating = True
-        card.knockback_round = 0
-    pygame.time.set_timer(kb_animation_event, 500, True)
-    return current_kb_round + 1
+def reset_cards(cards):
+    print('Resetting cards to original configuration')
+    cards[1].place((3, 2))
+    cards[2].place((5, 3))
+    cards[3].place((6, 3))
+    cards[4].place((6, 4))
 
 def update_positions(cards, kb_cards, round=1):
     for card in kb_cards:
@@ -197,11 +204,10 @@ def update_positions(cards, kb_cards, round=1):
                 print(f'{card.label} would collide with {collided.label} @ {dest_pos}')
                 collided.knockback = 3
                 collided.travel_dir = choose_neighbor_dir(card.travel_dir)
-                collided.knockback_round = round + 1
-                print(f'Set knockback_round for {collided.label} to {round + 1}')
-                print(f'{collided.label} will be knocked to the {collided.travel_dir} (KB round {round + 1})')
+                collided.knockback_round = card.knockback_round + 1
+                print(f'{collided.label} will be knocked to the {collided.travel_dir} (KB round {collided.knockback_round})')
                 kb_cards.insert(0, collided)
-                update_positions(cards, kb_cards, round + 1)
+                update_positions(cards, kb_cards, collided.knockback_round)
             else:
                 print(f'Destination {dest_pos} is free; {card.label} moves to {dest_pos}; KB = {card.knockback}')
                 card.set_target(dest_pos)
@@ -232,9 +238,13 @@ def main():
 
     enemy_card_1 = Card(label='E1', owner='opponent')
     enemy_card_2 = Card(label='E2', owner='opponent')
+    enemy_card_3 = Card(label='E3', owner='opponent')
+    enemy_card_4 = Card(label='E4', owner='opponent')
     enemy_card_1.place((3, 2))
     enemy_card_2.place((5, 3))
-    cards = [player_card, enemy_card_1, enemy_card_2]
+    enemy_card_3.place((6, 3))
+    enemy_card_4.place((6, 4))
+    cards = [player_card, enemy_card_1, enemy_card_2, enemy_card_3, enemy_card_4]
 
     is_running = True
 
@@ -247,6 +257,8 @@ def main():
                 is_running = False
             elif event.type == pygame.KEYDOWN:
                 attack(attacker=player_card, target=enemy_card_1)
+            elif event.type == pygame.MOUSEBUTTONUP:
+                reset_cards(cards)
             elif event.type == kb_animation_event:
                 if current_kb_round <= max([c.knockback_round for c in cards]):
                     current_kb_round = advance_kb_round(cards, kb_animation_event, current_kb_round)
