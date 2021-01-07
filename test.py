@@ -2,18 +2,21 @@ import math, random
 import pygame
 
 class Card(object):
-    def __init__(self, label, owner='player'):
+    def __init__(self, label, weight, power, owner='player'):
         super(Card, self).__init__()
         self.airborne = False
         self.animating = False
+        self.damage = 0
         self.dims = (50, 50)
         self.knockback = 0
         self.knockback_round = 0
         self.label = label # Display text
         self.owner = owner
         self.position = (0, 0) # (col, row)
+        self.power = power
         self.surf = pygame.Surface(self.dims)
         self.travel_dir = None
+        self.weight = weight
         self.x = 0 # Global x pos
         self.y = 0 # Global y pos
         self.x_target = 0 # Target x pos for animation
@@ -112,10 +115,24 @@ def attack(attacker, target):
         y_dir = 'north'
 
     # Apply knockback force and direction to target
-    target.knockback = 7
+    damage = 15
+    target.damage += damage
+    target.knockback = calculate_kb(
+        target.damage, damage, target.weight, attacker.power)
     target.travel_dir = ''.join([d for d in [y_dir, x_dir] if d])
 
-    print('Attack event')
+    print(f'{attacker.label}\'s attack deals {damage} damage and knocks {target.label} back {target.knockback} tiles to the {target.travel_dir}')
+
+def calculate_kb(p, d, w, b):
+    """
+    Returns number of tiles target will be knocked back
+
+    p = target's post-attack damage    (0 - 9,999)
+    d = damage dealt by attack         (0 - 9,999)
+    w = target's weight                   (1 - 10)
+    b = attacker's base power             (1 - 10)
+    """
+    return int((((p / 20 + p * b * 0.7 + 1 / d) * 5 / w)) / 100)
 
 def choose_neighbor_dir(seed):
     if seed == 'north':
@@ -186,6 +203,10 @@ def reset_cards(cards):
     cards[3].place((6, 3))
     cards[4].place((6, 4))
 
+    for card in cards:
+        card.damage = 0
+        card.travel_dir = None
+
 def update_positions(cards, kb_cards, round=1):
     for card in kb_cards:
         while card.knockback:
@@ -213,11 +234,6 @@ def update_positions(cards, kb_cards, round=1):
                 card.set_target(dest_pos)
 
 def main():
-    """
-    TODO
-        Create wall tiles
-        Handle wall collisions
-    """
     dims = (711, 711)
     pygame.init()
     pygame.display.set_caption('Cunégonde in Hell')
@@ -233,13 +249,13 @@ def main():
     current_kb_round = 1
     kb_animation_event = pygame.USEREVENT+ 1
 
-    player_card = Card(label='P')
+    player_card = Card(label='P', weight=3, power=5)
     player_card.place((2, 2))
 
-    enemy_card_1 = Card(label='E1', owner='opponent')
-    enemy_card_2 = Card(label='E2', owner='opponent')
-    enemy_card_3 = Card(label='E3', owner='opponent')
-    enemy_card_4 = Card(label='E4', owner='opponent')
+    enemy_card_1 = Card(label='E1', weight=1, power=1, owner='opponent')
+    enemy_card_2 = Card(label='E2', weight=1, power=1, owner='opponent')
+    enemy_card_3 = Card(label='E3', weight=1, power=1, owner='opponent')
+    enemy_card_4 = Card(label='E4', weight=1, power=1, owner='opponent')
     enemy_card_1.place((3, 2))
     enemy_card_2.place((5, 3))
     enemy_card_3.place((6, 3))
@@ -292,3 +308,34 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+"""
+
+TODO
+
+    Figure weights, damage and power into KB calculation
+    Create wall tiles
+    Handle wall collisions
+
+Notes on knockback calculations
+
+Weight: 1 - 10
+Power: 1 - 10
+Damage: 0 - 9,999
+
+Smash Bros 64 knockback formula
+
+(((p / 10 + p * d / 20) * (200 / (w + 100)) * 1.4 + 18) * s + b) * r
+
+    p = damage after attack
+    d = attack damage
+    w = target's weight (1 - 100)
+    s = knockback scaling
+    b = attack's base knockback
+    r = various ratios (handicap, crouch penalty, charge, etc.)
+
+For Cunégonde, we'll discard 's'.
+
+(((p / 10 + p * d / 20) * (200 / (w * 10 + 100)) * 1.4 + 18) + b) * r
+
+"""
