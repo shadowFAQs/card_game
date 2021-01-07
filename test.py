@@ -5,8 +5,10 @@ class Card(object):
     def __init__(self, label, owner='player'):
         super(Card, self).__init__()
         self.airborne = False
+        self.animating = False
         self.dims = (50, 50)
         self.knockback = 0
+        self.knockback_round = 0
         self.label = label # Display text
         self.owner = owner
         self.position = (0, 0) # (col, row)
@@ -30,16 +32,21 @@ class Card(object):
         self.surf.blit(label, dest=(offset_x, offset_y))
 
     def animate(self):
-        x_diff = self.x_target - self.x
-        y_diff = self.y_target - self.y
-        if x_diff > 0:
-            self.x += math.ceil(abs(x_diff / 5))
-        elif x_diff < 0:
-            self.x -= math.ceil(abs(x_diff / 5))
-        if y_diff > 0:
-            self.y += math.ceil(abs(y_diff / 5))
-        elif y_diff < 0:
-            self.y -= math.ceil(abs(y_diff / 5))
+        if self.animating:
+            x_diff = self.x_target - self.x
+            y_diff = self.y_target - self.y
+            if x_diff > 0:
+                self.x += math.ceil(abs(x_diff / 5))
+            elif x_diff < 0:
+                self.x -= math.ceil(abs(x_diff / 5))
+            if y_diff > 0:
+                self.y += math.ceil(abs(y_diff / 5))
+            elif y_diff < 0:
+                self.y -= math.ceil(abs(y_diff / 5))
+
+            if not x_diff and not y_diff:
+                print(f'(x, y) dest reached for {self.label}; turning off "animating" prop')
+                self.animating = False
 
     def place(self, pos):
         """Set card on a given (col, row) tile"""
@@ -163,14 +170,26 @@ def get_dest(old_pos, direction):
         print('Ring out -- bottom')
     return tuple(new_pos)
 
-def update_positions(cards, kb_cards):
+def advance_kb_round(cards, kb_animation_event, current_kb_round):
+    print(f'Looking for cards with KB round {current_kb_round}...')
+    for card in [c for c in cards if c.knockback_round == current_kb_round]:
+        print(f'Turning on animation for {card.label}')
+        card.animating = True
+        card.knockback_round = 0
+    pygame.time.set_timer(kb_animation_event, 500, True)
+    return current_kb_round + 1
+
+def update_positions(cards, kb_cards, round=1):
     for card in kb_cards:
         while card.knockback:
             print(f'{card.label} at {card.position} is travelling {card.travel_dir}; KB = {card.knockback}')
             card.knockback -= 1
+            if not card.knockback_round:
+                card.knockback_round = round
+                print(f'Set knockback_round for {card.label} to {round}')
             # Get position of next tile card would move to
             dest_pos = get_dest(card.position, card.travel_dir)
-            print(f'Card would move to {dest_pos}')
+            print(f'Card would move to {dest_pos} (KB round {round})')
             # Check if any cards occupy that spot
             collided = [c for c in cards if c.position == dest_pos]
             if collided:
@@ -178,9 +197,11 @@ def update_positions(cards, kb_cards):
                 print(f'{card.label} would collide with {collided.label} @ {dest_pos}')
                 collided.knockback = 3
                 collided.travel_dir = choose_neighbor_dir(card.travel_dir)
-                print(f'{collided.label} was knocked to the {collided.travel_dir}')
+                collided.knockback_round = round + 1
+                print(f'Set knockback_round for {collided.label} to {round + 1}')
+                print(f'{collided.label} will be knocked to the {collided.travel_dir} (KB round {round + 1})')
                 kb_cards.insert(0, collided)
-                update_positions(cards, kb_cards)
+                update_positions(cards, kb_cards, round + 1)
             else:
                 print(f'Destination {dest_pos} is free; {card.label} moves to {dest_pos}; KB = {card.knockback}')
                 card.set_target(dest_pos)
@@ -190,7 +211,6 @@ def main():
     TODO
         Create wall tiles
         Handle wall collisions
-        Separate "rounds" of knockback animation
     """
     dims = (711, 711)
     pygame.init()
@@ -199,10 +219,13 @@ def main():
 
     clock = pygame.time.Clock()
     fps = 0
+    input_paused = False
 
     background = pygame.Surface(dims)
     background.fill(pygame.Color('#222222'))
     grid = create_grid()
+    current_kb_round = 1
+    kb_animation_event = pygame.USEREVENT+ 1
 
     player_card = Card(label='P')
     player_card.place((2, 2))
@@ -224,14 +247,28 @@ def main():
                 is_running = False
             elif event.type == pygame.KEYDOWN:
                 attack(attacker=player_card, target=enemy_card_1)
+            elif event.type == kb_animation_event:
+                if current_kb_round <= max([c.knockback_round for c in cards]):
+                    current_kb_round = advance_kb_round(cards, kb_animation_event, current_kb_round)
+                else:
+                    current_kb_round = 1
 
-        moving_cards = [c for c in cards if c.knockback]
-        if moving_cards:
-            update_positions(cards, moving_cards)
+        # Update card positions every frame
+        update_positions(cards, [c for c in cards if c.knockback])
+
+        # Step through rounds of travelling cards and animate
+        if input_paused:
+            if not [c for c in cards if c.animating or c.knockback_round]:
+                input_paused = False
+                print('Input unpaused')
+        else:
+            if max([c.knockback_round for c in cards]):
+                input_paused = True
+                print('Input paused')
+                current_kb_round = advance_kb_round(cards, kb_animation_event, current_kb_round)
 
         for card in cards:
-            if card.x != card.x_target or card.y != card.y_target:
-                card.animate()
+            card.animate()
 
         window_surface.blit(background, (0, 0))
         for tile in grid:
