@@ -1,59 +1,78 @@
-import random
+import math
+import pygame
 
 class Card(object):
-    """docstring for Card"""
-    def __init__(self, kind, suit, zone=0, owner='player', controller='player'):
+    def __init__(self, label, weight, power, owner='player'):
         super(Card, self).__init__()
-        self.controller = controller
-        self.counters = []
+        self.airborne = False
+        self.animating = False
+        self.damage = 0
+        self.dims = (50, 50)
+        self.knockback = 0
+        self.knockback_round = 0
+        self.label = label # Display text
         self.owner = owner
-        self.kind = kind # Like 'A' or '5'
-        self.suit = suit
-        self.zone = zone
+        self.position = (0, 0) # (col, row)
+        self.power = power
+        self.surf = pygame.Surface(self.dims)
+        self.travel_dir = None
+        self.weight = weight
+        self.x = 0 # Global x pos
+        self.y = 0 # Global y pos
+        self.x_target = 0 # Target x pos for animation
+        self.y_target = 0 # Target y pos for animation
 
-        self.kind_name = self.get_kind()
-        self.full_name = self.get_full_name()
-        self.short_name = self.kind + self.suit[0]
-        self.value = self.get_value()
+        # 2px border
+        self.surf.fill(pygame.Color('#222222'))
+        color = pygame.Color('#777799') if self.owner == 'player' else pygame.Color('#997777')
+        pygame.draw.rect(self.surf, color, pygame.Rect((2, 2), (46, 46)))
 
-    def add_counter(self, counter):
-        # Add a single counter
-        if isinstance(counter, str):
-            self.counters.append(counter)
-        # Add a list of counters
-        else:
-            self.counters += counter
+        # Write label
+        font = pygame.font.SysFont('Consolas', 24)
+        label = font.render(self.label, True, pygame.Color('#000000'))
+        offset_x = int((self.dims[0] - label.get_size()[0]) / 2) # Center X
+        offset_y = int((self.dims[1] - label.get_size()[1]) / 2) # Center Y
+        self.surf.blit(label, dest=(offset_x, offset_y))
 
-    def clear_counters(self):
-        # Remove all counters
-        self.counters = []
+    def animate(self):
+        if self.animating:
+            x_diff = self.x_target - self.x
+            y_diff = self.y_target - self.y
+            if x_diff > 0:
+                self.x += math.ceil(abs(x_diff / 5))
+            elif x_diff < 0:
+                self.x -= math.ceil(abs(x_diff / 5))
+            if y_diff > 0:
+                self.y += math.ceil(abs(y_diff / 5))
+            elif y_diff < 0:
+                self.y -= math.ceil(abs(y_diff / 5))
 
-    def get_full_name(self):
-        return f'{self.kind} of {self.suit}s'
+            if not x_diff and not y_diff:
+                print(f'(x, y) dest reached for {self.label}; turning off "animating" prop')
+                self.animating = False
 
-    def get_kind(self):
-        if self.kind == 'A':
-            return 'Ace'
-        elif self.kind == 'K':
-            return 'King'
-        elif self.kind == 'Q':
-            return 'Queen'
-        elif self.kind == 'J':
-            return 'Jack'
-        else:
-            return [None, None, 'Deuce', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][int(self.kind)]
+    def place(self, pos):
+        """Set card on a given (col, row) tile"""
+        board_offset = 1
+        tile_size = 70
+        card_offset_x = int((tile_size - self.dims[0]) / 2)
+        card_offset_y = int((tile_size - self.dims[1]) / 2)
+        if pos[0] % 2:
+            card_offset_y += tile_size / 2
+        self.position = pos
+        self.x = board_offset + pos[0] * tile_size + pos[0] + card_offset_x
+        self.y = board_offset + pos[1] * tile_size + pos[1] + card_offset_y
+        self.x_target = self.x
+        self.y_target = self.y
 
-    def get_value(self):
-        if self.kind.isalpha():
-            return 11
-        else:
-            return int(self.kind)
-
-    def set_kind(self, kind):
-        self.kind = kind
-
-    def set_zone(self, zone=None):
-        if zone:
-            self.zone = zone
-        else:
-            self.zone = 0
+    def set_target(self, pos):
+        """Set target for animation"""
+        board_offset = 1
+        tile_size = 70
+        card_offset_x = int((tile_size - self.dims[0]) / 2)
+        card_offset_y = int((tile_size - self.dims[1]) / 2)
+        if pos[0] % 2:
+            card_offset_y += tile_size / 2
+        self.position = pos
+        self.x_target = board_offset + pos[0] * tile_size + pos[0] + card_offset_x
+        self.y_target = board_offset + pos[1] * tile_size + pos[1] + card_offset_y

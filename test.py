@@ -1,96 +1,8 @@
-import math, random
+import random
 import pygame
 
-class Card(object):
-    def __init__(self, label, weight, power, owner='player'):
-        super(Card, self).__init__()
-        self.airborne = False
-        self.animating = False
-        self.damage = 0
-        self.dims = (50, 50)
-        self.knockback = 0
-        self.knockback_round = 0
-        self.label = label # Display text
-        self.owner = owner
-        self.position = (0, 0) # (col, row)
-        self.power = power
-        self.surf = pygame.Surface(self.dims)
-        self.travel_dir = None
-        self.weight = weight
-        self.x = 0 # Global x pos
-        self.y = 0 # Global y pos
-        self.x_target = 0 # Target x pos for animation
-        self.y_target = 0 # Target y pos for animation
-
-        # 2px border
-        self.surf.fill(pygame.Color('#222222'))
-        color = pygame.Color('#777799') if self.owner == 'player' else pygame.Color('#997777')
-        pygame.draw.rect(self.surf, color, pygame.Rect((2, 2), (46, 46)))
-
-        # Write label
-        font = pygame.font.SysFont('Consolas', 24)
-        label = font.render(self.label, True, pygame.Color('#000000'))
-        offset_x = int((self.dims[0] - label.get_size()[0]) / 2) # Center X
-        offset_y = int((self.dims[1] - label.get_size()[1]) / 2) # Center Y
-        self.surf.blit(label, dest=(offset_x, offset_y))
-
-    def animate(self):
-        if self.animating:
-            x_diff = self.x_target - self.x
-            y_diff = self.y_target - self.y
-            if x_diff > 0:
-                self.x += math.ceil(abs(x_diff / 5))
-            elif x_diff < 0:
-                self.x -= math.ceil(abs(x_diff / 5))
-            if y_diff > 0:
-                self.y += math.ceil(abs(y_diff / 5))
-            elif y_diff < 0:
-                self.y -= math.ceil(abs(y_diff / 5))
-
-            if not x_diff and not y_diff:
-                print(f'(x, y) dest reached for {self.label}; turning off "animating" prop')
-                self.animating = False
-
-    def place(self, pos):
-        """Set card on a given (col, row) tile"""
-        board_offset = 1
-        tile_size = 70
-        card_offset_x = int((tile_size - self.dims[0]) / 2)
-        card_offset_y = int((tile_size - self.dims[1]) / 2)
-        if pos[0] % 2:
-            card_offset_y += tile_size / 2
-        self.position = pos
-        self.x = board_offset + pos[0] * tile_size + pos[0] + card_offset_x
-        self.y = board_offset + pos[1] * tile_size + pos[1] + card_offset_y
-        self.x_target = self.x
-        self.y_target = self.y
-
-    def set_target(self, pos):
-        """Set target for animation"""
-        board_offset = 1
-        tile_size = 70
-        card_offset_x = int((tile_size - self.dims[0]) / 2)
-        card_offset_y = int((tile_size - self.dims[1]) / 2)
-        if pos[0] % 2:
-            card_offset_y += tile_size / 2
-        self.position = pos
-        self.x_target = board_offset + pos[0] * tile_size + pos[0] + card_offset_x
-        self.y_target = board_offset + pos[1] * tile_size + pos[1] + card_offset_y
-
-class Tile(object):
-    def __init__(self, row, col, y_offset=False):
-        super(Tile, self).__init__()
-        self.dims = (70, 70)
-        offset = self.dims[1] / 2 if y_offset else 0
-        self.row = row
-        self.col = col
-        self.x = self.dims[0] * col + col + 1
-        self.y = self.dims[1] * row + row + 1 + offset
-        self.surf = pygame.Surface(self.dims)
-
-        # 1px border
-        self.surf.fill(pygame.Color('#b54848'))
-        pygame.draw.rect(self.surf, pygame.Color('#6f3333'), pygame.Rect((1, 1), (68, 68)))
+from card import Card
+from tile import Tile
 
 def advance_kb_round(cards, kb_animation_event, current_kb_round):
     print(f'Looking for cards with KB round {current_kb_round}...')
@@ -223,10 +135,18 @@ def update_positions(cards, kb_cards, round=1):
             if collided:
                 collided = collided[0]
                 print(f'{card.label} would collide with {collided.label} @ {dest_pos}')
-                collided.knockback = 3
+                # Collision's power depends on the weight and knockback
+                # values of the card knocked back
+                wt_ratio = card.weight / collided.weight
+                power = card.knockback * wt_ratio
+                # TODO: How much dmg does this deal?
+                damage = 10
+                collided.damage += damage
+                collided.knockback = calculate_kb(
+        collided.damage, damage, collided.weight, power)
                 collided.travel_dir = choose_neighbor_dir(card.travel_dir)
                 collided.knockback_round = card.knockback_round + 1
-                print(f'{collided.label} will be knocked to the {collided.travel_dir} (KB round {collided.knockback_round})')
+                print(f'{collided.label} will be knocked back {collided.knockback} tiles to the {collided.travel_dir} (KB round {collided.knockback_round})')
                 kb_cards.insert(0, collided)
                 update_positions(cards, kb_cards, collided.knockback_round)
             else:
@@ -313,29 +233,7 @@ if __name__ == '__main__':
 
 TODO
 
-    Figure weights, damage and power into KB calculation
     Create wall tiles
     Handle wall collisions
-
-Notes on knockback calculations
-
-Weight: 1 - 10
-Power: 1 - 10
-Damage: 0 - 9,999
-
-Smash Bros 64 knockback formula
-
-(((p / 10 + p * d / 20) * (200 / (w + 100)) * 1.4 + 18) * s + b) * r
-
-    p = damage after attack
-    d = attack damage
-    w = target's weight (1 - 100)
-    s = knockback scaling
-    b = attack's base knockback
-    r = various ratios (handicap, crouch penalty, charge, etc.)
-
-For Cunégonde, we'll discard 's'.
-
-(((p / 10 + p * d / 20) * (200 / (w * 10 + 100)) * 1.4 + 18) + b) * r
 
 """
