@@ -4,15 +4,6 @@ import pygame
 from card import Card
 from tile import Tile
 
-def advance_kb_round(cards, kb_animation_event, current_kb_round):
-    print(f'Looking for cards with KB round {current_kb_round}...')
-    for card in [c for c in cards if c.knockback_round == current_kb_round]:
-        print(f'Turning on animation for {card.label}')
-        card.animating = True
-        card.knockback_round = 0
-    pygame.time.set_timer(kb_animation_event, 500, True)
-    return current_kb_round + 1
-
 def attack(attacker, target):
     # Determine direction of knockback
     x_dir = None
@@ -32,6 +23,7 @@ def attack(attacker, target):
     target.knockback = calculate_kb(
         target.damage, damage, target.weight, attacker.power)
     target.travel_dir = ''.join([d for d in [y_dir, x_dir] if d])
+    target.animating = True
 
     print(f'{attacker.label}\'s attack deals {damage} damage and knocks {target.label} back {target.knockback} tiles to the {target.travel_dir}')
 
@@ -45,6 +37,17 @@ def calculate_kb(p, d, w, b):
     b = attacker's base power             (1 - 10)
     """
     return int((((p / 20 + p * b * 0.7 + 1 / d) * 5 / w)) / 100)
+
+def check_collision_events(collisions):
+    revised = []
+    for event in collisions:
+        if event['collider'].rect.colliderect(event['collided'].rect):
+            print(f'{event["collider"].label} has collided with {event["collided"].label} @ ({event["collider"].x}, {event["collider"].x}); turning on animation for {event["collided"].label}')
+            event['collided'].animating = True
+        else:
+            revised.append(event)
+
+    return revised
 
 def choose_neighbor_dir(seed):
     if seed == 'north':
@@ -119,17 +122,14 @@ def reset_cards(cards):
         card.damage = 0
         card.travel_dir = None
 
-def update_positions(cards, kb_cards, round=1):
+def set_collision_events(cards, kb_cards, collisions):
     for card in kb_cards:
         while card.knockback:
             print(f'{card.label} at {card.position} is travelling {card.travel_dir}; KB = {card.knockback}')
             card.knockback -= 1
-            if not card.knockback_round:
-                card.knockback_round = round
-                print(f'Set knockback_round for {card.label} to {round}')
             # Get position of next tile card would move to
             dest_pos = get_dest(card.position, card.travel_dir)
-            print(f'Card would move to {dest_pos} (KB round {round})')
+            print(f'Card would move to {dest_pos}')
             # Check if any cards occupy that spot
             collided = [c for c in cards if c.position == dest_pos]
             if collided:
@@ -143,15 +143,26 @@ def update_positions(cards, kb_cards, round=1):
                 damage = 10
                 collided.damage += damage
                 collided.knockback = calculate_kb(
-        collided.damage, damage, collided.weight, power)
-                collided.travel_dir = choose_neighbor_dir(card.travel_dir)
-                collided.knockback_round = card.knockback_round + 1
-                print(f'{collided.label} will be knocked back {collided.knockback} tiles to the {collided.travel_dir} (KB round {collided.knockback_round})')
-                kb_cards.insert(0, collided)
-                update_positions(cards, kb_cards, collided.knockback_round)
+                    collided.damage, damage, collided.weight, power)
+                if collided.knockback:
+                    collided.travel_dir = choose_neighbor_dir(card.travel_dir)
+                    print(f'{collided.label} will be knocked back {collided.knockback} tiles to the {collided.travel_dir}')
+                    kb_cards.insert(0, collided)
+                else:
+                    card.knockback = 0
+                    print(f'{collided.label} has stopped {card.label}\'s knockback')
+                # Create collision event
+                event = {
+                    'collider': card,
+                    'collided': collided,
+                    'position': dest_pos
+                }
+                collisions.append(event)
+                set_collision_events(cards, kb_cards, collisions)
             else:
                 print(f'Destination {dest_pos} is free; {card.label} moves to {dest_pos}; KB = {card.knockback}')
                 card.set_target(dest_pos)
+        return collisions
 
 def main():
     dims = (711, 711)
@@ -166,10 +177,8 @@ def main():
     background = pygame.Surface(dims)
     background.fill(pygame.Color('#222222'))
     grid = create_grid()
-    current_kb_round = 1
-    kb_animation_event = pygame.USEREVENT+ 1
 
-    player_card = Card(label='P', weight=3, power=5)
+    player_card = Card(label='P', weight=3, power=15)
     player_card.place((2, 2))
 
     enemy_card_1 = Card(label='E1', weight=1, power=1, owner='opponent')
@@ -182,6 +191,8 @@ def main():
     enemy_card_4.place((6, 4))
     cards = [player_card, enemy_card_1, enemy_card_2, enemy_card_3, enemy_card_4]
 
+    collisions = []
+
     is_running = True
 
     while is_running:
@@ -193,27 +204,25 @@ def main():
                 is_running = False
             elif event.type == pygame.KEYDOWN:
                 attack(attacker=player_card, target=enemy_card_1)
+                collisions = set_collision_events(
+                    cards, [c for c in cards if c.knockback], collisions)
             elif event.type == pygame.MOUSEBUTTONUP:
                 reset_cards(cards)
-            elif event.type == kb_animation_event:
-                if current_kb_round <= max([c.knockback_round for c in cards]):
-                    current_kb_round = advance_kb_round(cards, kb_animation_event, current_kb_round)
-                else:
-                    current_kb_round = 1
 
-        # Update card positions every frame
-        update_positions(cards, [c for c in cards if c.knockback])
+        # Animate collisions every frame
+        if collisions:
+            collisions = check_collision_events(collisions)
 
-        # Step through rounds of travelling cards and animate
+        # Pause input if cards are animating
         if input_paused:
-            if not [c for c in cards if c.animating or c.knockback_round]:
+            if not [c for c in cards if c.animating]:
+                # All cards finished with animation
                 input_paused = False
                 print('Input unpaused')
         else:
-            if max([c.knockback_round for c in cards]):
+            if [c for c in cards if c.animating]:
                 input_paused = True
                 print('Input paused')
-                current_kb_round = advance_kb_round(cards, kb_animation_event, current_kb_round)
 
         for card in cards:
             card.animate()
@@ -233,7 +242,20 @@ if __name__ == '__main__':
 
 TODO
 
+    Change KB round delay so that cards start animating when they're hit
     Create wall tiles
     Handle wall collisions
+    Add potential to "pop up" from collision instead of being knocked back
+
+New animation/knockback system
+
+Calculate all KBs and destinations up front, but don't switch on animation for each tile until the one that hits them arrives.
+
+collision event
+    collider
+    collided
+
+    if sprite collision occurs between collider and collided:
+        collided.animating = True
 
 """

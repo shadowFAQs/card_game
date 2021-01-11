@@ -9,11 +9,11 @@ class Card(object):
         self.damage = 0
         self.dims = (50, 50)
         self.knockback = 0
-        self.knockback_round = 0
         self.label = label # Display text
         self.owner = owner
         self.position = (0, 0) # (col, row)
         self.power = power
+        self.rect = pygame.Rect(0, 0, self.dims[0], self.dims[1])
         self.surf = pygame.Surface(self.dims)
         self.travel_dir = None
         self.weight = weight
@@ -39,16 +39,18 @@ class Card(object):
             x_diff = self.x_target - self.x
             y_diff = self.y_target - self.y
             if x_diff > 0:
-                self.x += math.ceil(abs(x_diff / 5))
+                self.x += math.ceil(abs(x_diff / 50))
             elif x_diff < 0:
-                self.x -= math.ceil(abs(x_diff / 5))
+                self.x -= math.ceil(abs(x_diff / 50))
             if y_diff > 0:
-                self.y += math.ceil(abs(y_diff / 5))
+                self.y += math.ceil(abs(y_diff / 50))
             elif y_diff < 0:
-                self.y -= math.ceil(abs(y_diff / 5))
+                self.y -= math.ceil(abs(y_diff / 50))
+
+            self.rect = pygame.Rect(self.x, self.y, self.dims[0], self.dims[1])
 
             if not x_diff and not y_diff:
-                print(f'(x, y) dest reached for {self.label}; turning off "animating" prop')
+                # print(f'(x, y) dest reached for {self.label}; turning off "animating" prop')
                 self.animating = False
 
     def place(self, pos):
