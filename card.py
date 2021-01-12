@@ -13,7 +13,6 @@ class Card(object):
         self.owner = owner
         self.position = (0, 0) # (col, row)
         self.power = power
-        self.rect = pygame.Rect(0, 0, self.dims[0], self.dims[1])
         self.surf = pygame.Surface(self.dims)
         self.travel_dir = None
         self.weight = weight
@@ -22,36 +21,32 @@ class Card(object):
         self.x_target = 0 # Target x pos for animation
         self.y_target = 0 # Target y pos for animation
 
-        # 2px border
-        self.surf.fill(pygame.Color('#222222'))
-        color = pygame.Color('#777799') if self.owner == 'player' else pygame.Color('#997777')
-        pygame.draw.rect(self.surf, color, pygame.Rect((2, 2), (46, 46)))
-
-        # Write label
-        font = pygame.font.SysFont('Consolas', 24)
-        label = font.render(self.label, True, pygame.Color('#000000'))
-        offset_x = int((self.dims[0] - label.get_size()[0]) / 2) # Center X
-        offset_y = int((self.dims[1] - label.get_size()[1]) / 2) # Center Y
-        self.surf.blit(label, dest=(offset_x, offset_y))
+        self.set_bg_color('#777799')
 
     def animate(self):
         if self.animating:
+            min_velocity = 2
             x_diff = self.x_target - self.x
             y_diff = self.y_target - self.y
-            if x_diff > 0:
-                self.x += math.ceil(abs(x_diff / 50))
-            elif x_diff < 0:
-                self.x -= math.ceil(abs(x_diff / 50))
-            if y_diff > 0:
-                self.y += math.ceil(abs(y_diff / 50))
-            elif y_diff < 0:
-                self.y -= math.ceil(abs(y_diff / 50))
+            dist = math.sqrt(x_diff ** 2 + y_diff ** 2)
+            speed = max(dist / 25, min_velocity)
+            rad = math.radians(self.get_angle(x_diff, y_diff))
+            self.x = self.x + speed * (math.cos(rad))
+            self.y = self.y - speed * (math.sin(rad))
 
-            self.rect = pygame.Rect(self.x, self.y, self.dims[0], self.dims[1])
-
-            if not x_diff and not y_diff:
-                # print(f'(x, y) dest reached for {self.label}; turning off "animating" prop')
+            # Snap to destination once within 2px
+            if abs(x_diff) < 2 and abs(y_diff) < 2:
+                print(f'(x, y) dest reached for {self.label}; turning off "animating" prop')
+                self.x = self.x_target
+                self.y = self.y_target
                 self.animating = False
+
+            self.set_bg_color('#cccccc')
+        else:
+            self.set_bg_color('#777799')
+
+    def get_angle(self, dx, dy):
+        return math.degrees(math.atan2(dy * -1, dx))
 
     def place(self, pos):
         """Set card on a given (col, row) tile"""
@@ -66,6 +61,18 @@ class Card(object):
         self.y = board_offset + pos[1] * tile_size + pos[1] + card_offset_y
         self.x_target = self.x
         self.y_target = self.y
+
+    def set_bg_color(self, color):
+        self.surf.fill(pygame.Color('#222222')) # 2px border
+        color = pygame.Color(color)
+        pygame.draw.rect(self.surf, color, pygame.Rect((2, 2), (46, 46)))
+
+        # Write label
+        font = pygame.font.SysFont('Consolas', 24)
+        label = font.render(self.label, True, pygame.Color('#000000'))
+        offset_x = int((self.dims[0] - label.get_size()[0]) / 2) # Center X
+        offset_y = int((self.dims[1] - label.get_size()[1]) / 2) # Center Y
+        self.surf.blit(label, dest=(offset_x, offset_y))
 
     def set_target(self, pos):
         """Set target for animation"""

@@ -38,17 +38,6 @@ def calculate_kb(p, d, w, b):
     """
     return int((((p / 20 + p * b * 0.7 + 1 / d) * 5 / w)) / 100)
 
-def check_collision_events(collisions):
-    revised = []
-    for event in collisions:
-        if event['collider'].rect.colliderect(event['collided'].rect):
-            print(f'{event["collider"].label} has collided with {event["collided"].label} @ ({event["collider"].x}, {event["collider"].x}); turning on animation for {event["collided"].label}')
-            event['collided'].animating = True
-        else:
-            revised.append(event)
-
-    return revised
-
 def choose_neighbor_dir(seed):
     if seed == 'north':
         return random.choice(['northwest', 'northeast'])
@@ -139,8 +128,7 @@ def set_collision_events(cards, kb_cards, collisions):
                 # values of the card knocked back
                 wt_ratio = card.weight / collided.weight
                 power = card.knockback * wt_ratio
-                # TODO: How much dmg does this deal?
-                damage = 10
+                damage = 10 # TODO: How much dmg does this deal?
                 collided.damage += damage
                 collided.knockback = calculate_kb(
                     collided.damage, damage, collided.weight, power)
@@ -163,6 +151,19 @@ def set_collision_events(cards, kb_cards, collisions):
                 print(f'Destination {dest_pos} is free; {card.label} moves to {dest_pos}; KB = {card.knockback}')
                 card.set_target(dest_pos)
         return collisions
+
+def update_collision_events(collisions):
+    revised = []
+    for event in collisions:
+        collider = event['collider']
+        collided = event['collided']
+        if collider.surf.get_rect(topleft=(collider.x, collider.y)).colliderect(collided.surf.get_rect(topleft=(collided.x, collided.y))):
+            print(f'{event["collider"].label} has collided with {event["collided"].label} @ ({event["collider"].x}, {event["collider"].x}); turning on animation for {event["collided"].label}')
+            event['collided'].animating = True
+        else:
+            revised.append(event)
+
+    return revised
 
 def main():
     dims = (711, 711)
@@ -191,6 +192,9 @@ def main():
     enemy_card_4.place((6, 4))
     cards = [player_card, enemy_card_1, enemy_card_2, enemy_card_3, enemy_card_4]
 
+    print(player_card.x, player_card.y)
+    print(enemy_card_1.x, enemy_card_1.y)
+
     collisions = []
 
     is_running = True
@@ -211,7 +215,7 @@ def main():
 
         # Animate collisions every frame
         if collisions:
-            collisions = check_collision_events(collisions)
+            collisions = update_collision_events(collisions)
 
         # Pause input if cards are animating
         if input_paused:
