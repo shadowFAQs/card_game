@@ -10,10 +10,12 @@ class Card(object):
         self.dims = (50, 50)
         self.direction = 0
         self.ease_frame = 0
-        self.ease_frames_max = 60
+        self.ease_frames_max = 40
         self.ease_start = self.center
         self.ease_steps = []
         self.surf = pygame.Surface(self.dims)
+        self.x_origin = position[0]
+        self.y_origin = position[1]
         self.x_target = 0
         self.y_target = 0
         self.x = position[0]
@@ -28,16 +30,15 @@ class Card(object):
                 x_diff = self.x_target - self.ease_start[0]
                 y_diff = self.y_target - self.ease_start[1]
                 dist = math.sqrt(x_diff ** 2 + y_diff ** 2)
-                self.ease_steps = set_ease_steps(0, dist, 30, 'in')
-                self.ease_steps += set_ease_steps(0, -dist, 30, 'out')
+                self.ease_steps = set_static_ease_steps()
 
             self.ease_frame += 1
             if self.ease_frame == self.ease_frames_max:
                 self.animating = False
                 self.ease_frame = 0
                 self.ease_steps = []
-                self.x = round(self.x)
-                self.y = round(self.y)
+                self.x = self.x_origin
+                self.y = self.y_origin
             else:
                 ease_value = self.ease_steps[self.ease_frame]
                 self.x = self.x + (math.cos(self.direction)) * ease_value
@@ -54,9 +55,12 @@ def attack(card, pos):
     card.ease_start = (card.x, card.y)
     card.animating = True
 
-def set_ease_steps(start, delta, frames, ease_type):
+def get_angle(dx, dy):
+    return math.degrees(math.atan2(dy * -1, dx))
+
+def set_ease_steps(delta, frames):
     # Create exponential ease
-    ease = [delta * (2 ** (10 * (t / frames - 1))) + start for t in range(1, frames + 1)]
+    ease = [delta * (2 ** (10 * (t / frames - 1))) for t in range(1, frames + 1)]
     # Translate steps so that total sum = delta
     div = sum(ease) / delta
     ease = [v / div for v in ease]
@@ -65,8 +69,8 @@ def set_ease_steps(start, delta, frames, ease_type):
 
     return ease
 
-def get_angle(dx, dy):
-    return math.degrees(math.atan2(dy * -1, dx))
+def set_static_ease_steps():
+    return [-0.02, -0.08, -0.16, -0.32, -0.64, -1.28, -0.64, -0.32, -0.16, -0.08, 0.02, 0.03, 0.04, 0.06, 0.08, 0.11, 0.16, 0.23, 0.32, 0.46, 0.65, 0.92, 1.3, 1.83, 2.59, 3.66, 5.18, 7.83, 10.87, 17.36, -14.66, -10.37, -7.33, -5.18, -3.66, -2.59, -1.83, -1.3, -0.92, -0.65, -0.46, -0.32, -0.23, -0.16, -0.11, -0.08, -0.06, -0.04, -0.03, -0.02]
 
 def main():
     dims = (500, 500)
